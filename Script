@@ -1,0 +1,91 @@
+import requests
+import json
+import datetime
+
+# Define base URL and API endpoints
+base_url = "https://api.crowdstrike.com/"
+oauth_uri = "oauth2/token"
+query_uri = "/discover/queries/applications/v1"
+details_uri = "/discover/entities/applications/v1?ids="
+
+# Get authentication token
+auth_creds = {
+    "client_id": "<client_id>",
+    "client_secret": "<client_secret",
+    "grant_type": "client_credentials"
+}
+
+headers = {
+    "Content-type": "application/x-www-form-urlencoded",
+    "accept": "application/json"
+}
+
+print("Requesting token from " + base_url + oauth_uri)
+auth_response = requests.post(base_url + oauth_uri, data=auth_creds, headers=headers)
+
+# Check for errors
+if auth_response.status_code != 201:
+    print("Error getting token: " + str(auth_response.status_code))
+    print(auth_response.content)
+    exit()
+
+# Get access token
+auth_token = auth_response.json()["access_token"]
+
+# Use the authentication token to call API endpoint
+headers = {
+    "authorization": "bearer " + auth_token,
+    "accept": "application/json"
+}
+
+# Build API endpoint
+call_params = {
+    "type": "application",
+    "value": "crowdstrike.com",
+    "limit": "",  # You can define the limit
+    "offset": "",
+    "filter": "host.hostname:'my computer' + last_used_file_name:'my app'"  # Filters are here https://falcon.crowdstrike.com/documentation/197/falcon-discover-apis
+}
+
+# Call /discover/queries/applications/v1
+print("Getting application IDs from " + base_url + query_uri)
+application_id_response = requests.get(base_url + query_uri, params=call_params, headers=headers)
+
+# Check for errors
+if application_id_response.status_code != 200:
+    print("Error getting application IDs: " + str(application_id_response.status_code))
+    print(application_id_response.content)
+    exit()
+
+# Get application IDs
+result = application_id_response.json()
+print("Found " + str(len(result["resources"])) + " application IDs:")
+
+# Build API endpoint to get application details
+detail_params = {
+    "type": "application",
+    "url": "crowdstrike.com"
+}
+
+url = 'https://api.crowdstrike.com/discover/entities/applications/v1?ids={}'.format(
+    '&ids='.join(list(result["resources"])))
+
+# Call /discover/entities/applications/v1
+print("Getting application details from " + base_url + details_uri)
+application_details_response = requests.get(url, params=detail_params, headers=headers)
+
+# Check for errors
+if application_details_response.status_code != 200:
+    print("Error getting application details: " + str(application_details_response.status_code))
+    print(application_details_response.content)
+    exit()
+
+# Get application details
+details = application_details_response.json()
+print("Found " + str(len(details["resources"])) + " application details:")
+
+# Save application details to a file
+log = open("/Path/to/file/output.json", "w")
+log.write(json.dumps(details))
+
+print("Finished")
